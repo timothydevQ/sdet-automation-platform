@@ -1,0 +1,148 @@
+openapi: 3.0.3
+info:
+  title: SDET Automation Platform API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      responses:
+        "200": { description: OK }
+  /auth/register:
+    post:
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Credentials" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "400": { description: Bad request }
+        "409": { description: Conflict }
+  /auth/login:
+    post:
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Credentials" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenResponse" }
+        "401": { description: Unauthorized }
+  /catalog/products:
+    get:
+      summary: List products
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Product" }
+  /cart:
+    get:
+      summary: Get cart
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CartItem" }
+  /cart/items:
+    post:
+      summary: Add to cart
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sku, qty]
+              properties:
+                sku: { type: string }
+                qty: { type: integer, minimum: 1 }
+      responses:
+        "200": { description: OK }
+        "400": { description: Bad request }
+        "401": { description: Unauthorized }
+  /checkout:
+    post:
+      summary: Place order
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                coupon: { type: string }
+                card_token: { type: string }
+      responses:
+        "201": { description: Created }
+        "200": { description: Idempotent replay }
+        "400": { description: Bad request }
+        "402": { description: Payment failed }
+        "409": { description: Insufficient stock }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Credentials:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 6 }
+    TokenResponse:
+      type: object
+      required: [token, role]
+      properties:
+        token: { type: string }
+        role: { type: string, enum: [customer, admin] }
+    Product:
+      type: object
+      required: [id, sku, name, price_cents, stock]
+      properties:
+        id: { type: integer }
+        sku: { type: string }
+        name: { type: string }
+        price_cents: { type: integer, minimum: 0 }
+        stock: { type: integer }
+        category: { type: string }
+    CartItem:
+      type: object
+      required: [sku, qty, name, price_cents]
+      properties:
+        sku: { type: string }
+        qty: { type: integer, minimum: 1 }
+        name: { type: string }
+        price_cents: { type: integer, minimum: 0 }

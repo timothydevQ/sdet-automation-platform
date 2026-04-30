@@ -1,0 +1,8 @@
+[
+  {"name": "missing_email", "payload": {"password": "x"}},
+  {"name": "missing_password", "payload": {"email": "a@b.com"}},
+  {"name": "empty_email", "payload": {"email": "", "password": "x"}},
+  {"name": "no_at_sign", "payload": {"email": "notanemail", "password": "Hunter22!"}},
+  {"name": "short_password", "payload": {"email": "a@b.com", "password": "abc"}},
+  {"name": "extra_field", "payload": {"email": "a@b.com", "password": "Hunter22!", "admin": true}}
+]

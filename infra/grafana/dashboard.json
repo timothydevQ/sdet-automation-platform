@@ -1,0 +1,10 @@
+{
+  "title": "SDET Platform Overview",
+  "panels": [
+    {"type": "graph", "title": "Request rate (req/s)"},
+    {"type": "graph", "title": "P95 latency"},
+    {"type": "stat",  "title": "Error rate"},
+    {"type": "graph", "title": "Test pass rate (last 30 runs)"},
+    {"type": "table", "title": "Top 10 flaky tests"}
+  ]
+}

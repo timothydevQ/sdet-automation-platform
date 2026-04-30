@@ -1,0 +1,53 @@
+# Build artifacts
+build/
+dist/
+out/
+target/
+bin/
+obj/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Dependencies
+node_modules/
+vendor/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.gradle/
+.mvn/
+
+# Test artifacts
+artifacts/
+playwright-report/
+test-results/
+.coverage
+coverage/
+*.xml
+!pom.xml
+!**/csproj.xml
+htmlcov/
+allure-results/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+.DS_Store
+
+# Env
+.env
+.env.local
+*.local
+
+# Logs
+*.log
+logs/
+
+# Generated
+schemas/generated/
+proto/gen/

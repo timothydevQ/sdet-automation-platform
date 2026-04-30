@@ -1,0 +1,8 @@
+[
+  {"name": "empty_body", "payload": {}},
+  {"name": "negative_qty", "cart": [{"sku": "SKU-001", "qty": -1}]},
+  {"name": "zero_qty", "cart": [{"sku": "SKU-001", "qty": 0}]},
+  {"name": "unknown_sku", "cart": [{"sku": "SKU-DOES-NOT-EXIST", "qty": 1}]},
+  {"name": "huge_qty", "cart": [{"sku": "SKU-001", "qty": 999999}]},
+  {"name": "decline_card", "card": "tok_decline_card"}
+]

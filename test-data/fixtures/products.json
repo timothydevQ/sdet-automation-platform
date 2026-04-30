@@ -1,0 +1,5 @@
+[
+  {"sku": "SKU-001", "name": "Mechanical Keyboard", "price_cents": 19999, "stock": 100, "category": "electronics"},
+  {"sku": "SKU-002", "name": "Wireless Mouse",      "price_cents": 4500,  "stock": 100, "category": "electronics"},
+  {"sku": "SKU-LIMITED", "name": "Limited Edition Mug", "price_cents": 2500, "stock": 2, "category": "merch"}
+]

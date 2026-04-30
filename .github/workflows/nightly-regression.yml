@@ -1,0 +1,43 @@
+name: nightly-regression
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [api, e2e, java, dotnet, ruby, go, cpp]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose up -d --build
+      - run: ./scripts/seed-db.sh
+      - run: ./scripts/run-suite.sh ${{ matrix.suite }} regression
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-${{ matrix.suite }}
+          path: artifacts/
+
+  analyze:
+    needs: matrix
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install -r platform/report_ingestor/requirements.txt
+      - run: pip install -r platform/flaky_detector/requirements.txt
+      - run: docker compose up -d postgres
+      - run: psql postgres://sdet:sdet@localhost:5432/sdet -f platform/schemas/schema.sql
+      - run: cd platform && python -m report_ingestor ../artifacts
+      - run: cd platform && python -m flaky_detector --out ../artifacts/flaky-tests.md
+      - run: cd platform && python -m flaky_detector --release-check --out ../artifacts/release-readiness.md || true
+      - uses: actions/upload-artifact@v4
+        with: { name: analysis, path: artifacts/*.md }

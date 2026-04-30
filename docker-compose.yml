@@ -1,0 +1,129 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sdet
+      POSTGRES_PASSWORD: sdet
+      POSTGRES_DB: sdet
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./test-data/seed.sql:/docker-entrypoint-initdb.d/00-seed.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sdet"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  kafka:
+    image: redpandadata/redpanda:v24.2.4
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --node-id=0
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://kafka:9092
+    ports:
+      - "9092:9092"
+
+  auth-service:
+    build: ./apps/auth-service
+    environment:
+      DB_DSN: postgres://sdet:sdet@postgres:5432/sdet?sslmode=disable
+      JWT_SECRET: dev-secret-do-not-use-in-prod
+      PORT: "8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+
+  catalog-service:
+    build: ./apps/catalog-service
+    environment:
+      DB_DSN: postgres://sdet:sdet@postgres:5432/sdet?sslmode=disable
+      PORT: "8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8082:8082"
+
+  payment-service:
+    build: ./apps/payment-service
+    environment:
+      PORT: "8083"
+      FAILURE_RATE: "0.05"
+    ports:
+      - "8083:8083"
+
+  order-service:
+    build: ./apps/order-service
+    environment:
+      DB_DSN: postgres://sdet:sdet@postgres:5432/sdet?sslmode=disable
+      REDIS_ADDR: redis:6379
+      KAFKA_BROKERS: kafka:9092
+      CATALOG_URL: http://catalog-service:8082
+      PAYMENT_URL: http://payment-service:8083
+      AUTH_URL: http://auth-service:8081
+      PORT: "8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      catalog-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
+    ports:
+      - "8084:8084"
+
+  notification-service:
+    build: ./apps/notification-service
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC: orders.events
+    depends_on:
+      - kafka
+
+  api-gateway:
+    build: ./apps/api-gateway
+    environment:
+      AUTH_URL: http://auth-service:8081
+      CATALOG_URL: http://catalog-service:8082
+      ORDER_URL: http://order-service:8084
+      PORT: "8080"
+    depends_on:
+      - auth-service
+      - catalog-service
+      - order-service
+    ports:
+      - "8080:8080"
+
+  web:
+    build: ./apps/web
+    environment:
+      VITE_API_BASE: http://localhost:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+
+volumes:
+  pg_data:
