@@ -1,6 +1,6 @@
 # SDET Automation Platform
 
-A polyglot test automation platform built around a microservice e-commerce application. Demonstrates API testing, end-to-end UI testing, contract testing, performance testing, accessibility checks, native code testing, and a small platform layer for report ingestion and flaky-test analytics.
+A test automation platform built around a microservice e-commerce application. Demonstrates API testing, end-to-end UI testing, contract testing, performance testing, accessibility checks, native code testing, and a small platform layer for report ingestion and flaky-test analytics.
 
 ## Why this exists
 
