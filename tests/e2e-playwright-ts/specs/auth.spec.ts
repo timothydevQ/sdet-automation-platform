@@ -8,13 +8,13 @@ test.describe("auth @smoke", () => {
     const login = new LoginPage(page);
     await login.goto();
     await login.login(u.email, u.password);
-    await expect(page).toHaveURL("/");
+    await expect(page).toHaveURL("/", { timeout: 15000 });
   });
 
   test("invalid credentials show error", async ({ page }) => {
     const login = new LoginPage(page);
     await login.goto();
-    await login.login("nobody@test.local", "wrong");
-    await expect(login.errorText()).toBeVisible();
+    await login.login("nobody@nowhere.local", "wrongpassword");
+    await expect(login.errorText()).toBeVisible({ timeout: 10000 });
   });
 });

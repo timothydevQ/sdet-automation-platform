@@ -39,11 +39,20 @@ jobs:
       fail-fast: false
       matrix:
         suite: [api, e2e, java, dotnet]
+    env:
+      API_BASE: http://localhost:8080
+      WEB_BASE_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
       - run: docker compose up -d --build
-      - run: ./scripts/seed-db.sh
-      - run: ./scripts/run-suite.sh ${{ matrix.suite }} smoke
+      - name: Wait for services
+        run: |
+          for i in {1..60}; do
+            if curl -sf http://localhost:8080/healthz; then break; fi
+            sleep 2
+          done
+      - run: bash scripts/seed-db.sh
+      - run: bash scripts/run-suite.sh ${{ matrix.suite }} smoke
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -51,4 +60,4 @@ jobs:
           path: artifacts/
           if-no-files-found: ignore
       - if: always()
-        run: docker compose logs > artifacts/compose.log || true
+        run: docker compose logs > artifacts/compose.log 2>&1 || true

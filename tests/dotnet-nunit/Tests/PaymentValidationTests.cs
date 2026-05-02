@@ -1,4 +1,5 @@
 using System.Net;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using SdetAutomation.Tests.Clients;
 
