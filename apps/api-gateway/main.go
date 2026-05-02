@@ -44,9 +44,10 @@ func main() {
 	mux.Handle("/auth/", stripAndProxy("/auth", cfg.Auth))
 	mux.Handle("/catalog/", stripAndProxy("/catalog", cfg.Catalog))
 	mux.Handle("/orders/", stripAndProxy("/orders", cfg.Order))
-	mux.Handle("/cart/", stripAndProxy("/cart", cfg.Order))
+	mux.Handle("/cart/", stripAndProxy("", cfg.Order))
 	mux.Handle("/checkout", stripAndProxy("", cfg.Order))
-	mux.Handle("/admin/", stripAndProxy("/admin", cfg.Order))
+	mux.Handle("/admin/", stripAndProxy("", cfg.Order))
+        mux.Handle("POST /checkout", stripAndProxy("", cfg.Order))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
