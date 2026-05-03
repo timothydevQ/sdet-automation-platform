@@ -42,4 +42,104 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/auth/", stripAndProxy("/a
+	mux.Handle("/auth/", stripAndProxy("/auth", cfg.Auth))
+	mux.Handle("/catalog/", stripAndProxy("/catalog", cfg.Catalog))
+
+	mux.Handle("/cart", proxyTo(cfg.Order))
+	mux.Handle("/cart/", proxyTo(cfg.Order))
+	mux.Handle("/checkout", proxyTo(cfg.Order))
+	mux.Handle("/orders/", proxyTo(cfg.Order))
+	mux.Handle("/admin/", proxyTo(cfg.Order))
+
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok"))
+	})
+
+	rl := newRateLimiter(100, time.Minute)
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           rl.middleware(withCORS(mux)),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	log.Printf("api-gateway listening on :%s", port)
+	log.Fatal(srv.ListenAndServe())
+}
+
+func stripAndProxy(prefix, target string) http.Handler {
+	u, err := url.Parse(target)
+	if err != nil {
+		log.Fatalf("bad target %s: %v", target, err)
+	}
+	rp := httputil.NewSingleHostReverseProxy(u)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.URL.Path = strings.TrimPrefix(r.URL.Path, prefix)
+		if r.URL.Path == "" {
+			r.URL.Path = "/"
+		}
+		rp.ServeHTTP(w, r)
+	})
+}
+
+func proxyTo(target string) http.Handler {
+	u, err := url.Parse(target)
+	if err != nil {
+		log.Fatalf("bad target %s: %v", target, err)
+	}
+	return httputil.NewSingleHostReverseProxy(u)
+}
+
+func withCORS(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Idempotency-Key")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
+type rateLimiter struct {
+	mu      sync.Mutex
+	max     int
+	window  time.Duration
+	buckets map[string][]time.Time
+}
+
+func newRateLimiter(max int, window time.Duration) *rateLimiter {
+	return &rateLimiter{max: max, window: window, buckets: make(map[string][]time.Time)}
+}
+
+func (r *rateLimiter) middleware(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		key := clientKey(req)
+		r.mu.Lock()
+		now := time.Now()
+		cutoff := now.Add(-r.window)
+		hits := r.buckets[key]
+		fresh := hits[:0]
+		for _, t := range hits {
+			if t.After(cutoff) {
+				fresh = append(fresh, t)
+			}
+		}
+		if len(fresh) >= r.max {
+			r.buckets[key] = fresh
+			r.mu.Unlock()
+			http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+			return
+		}
+		r.buckets[key] = append(fresh, now)
+		r.mu.Unlock()
+		h.ServeHTTP(w, req)
+	})
+}
+
+func clientKey(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		return xff
+	}
+	return r.RemoteAddr
+}
