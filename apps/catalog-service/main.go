@@ -69,7 +69,7 @@ func listProducts(db *sql.DB) http.HandlerFunc {
 			// BUG (intentional): doesn't escape % and _ in LIKE pattern.
 			// Search breaks for special chars; caught by test_search_special_chars.
 			rows, err = db.Query(`SELECT id, sku, name, price_cents, stock, category
-				FROM products WHERE name ILIKE $1`, "%"+q+"%")
+				FROM products WHERE name ILIKE $1 OR sku ILIKE $1`, "%"+q+"%")
 		} else {
 			rows, err = db.Query(`SELECT id, sku, name, price_cents, stock, category FROM products`)
 		}
