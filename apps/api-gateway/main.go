@@ -11,21 +11,7 @@ import (
 	"time"
 )
 
-type config struct {
-	Auth    string
-	Catalog string
-	Order   string
-}
-
-func loadConfig() config {
-	return config{
-		Auth:    must("AUTH_URL"),
-		Catalog: must("CATALOG_URL"),
-		Order:   must("ORDER_URL"),
-	}
-}
-
-func must(k string) string {
+func mustEnv(k string) string {
 	v := os.Getenv(k)
 	if v == "" {
 		log.Fatalf("%s required", k)
@@ -33,54 +19,7 @@ func must(k string) string {
 	return v
 }
 
-func main() {
-	cfg := loadConfig()
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	mux := http.NewServeMux()
-
-	mux.Handle("/auth/", stripAndProxy("/auth", cfg.Auth))
-	mux.Handle("/catalog/", stripAndProxy("/catalog", cfg.Catalog))
-
-	mux.Handle("/cart", proxyTo(cfg.Order))
-	mux.Handle("/cart/", proxyTo(cfg.Order))
-	mux.Handle("/checkout", proxyTo(cfg.Order))
-	mux.Handle("/orders/", proxyTo(cfg.Order))
-	mux.Handle("/admin/", proxyTo(cfg.Order))
-
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ok"))
-	})
-
-	rl := newRateLimiter(100, time.Minute)
-	srv := &http.Server{
-		Addr:              ":" + port,
-		Handler:           rl.middleware(withCORS(mux)),
-		ReadHeaderTimeout: 5 * time.Second,
-	}
-	log.Printf("api-gateway listening on :%s", port)
-	log.Fatal(srv.ListenAndServe())
-}
-
-func stripAndProxy(prefix, target string) http.Handler {
-	u, err := url.Parse(target)
-	if err != nil {
-		log.Fatalf("bad target %s: %v", target, err)
-	}
-	rp := httputil.NewSingleHostReverseProxy(u)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.URL.Path = strings.TrimPrefix(r.URL.Path, prefix)
-		if r.URL.Path == "" {
-			r.URL.Path = "/"
-		}
-		rp.ServeHTTP(w, r)
-	})
-}
-
-func proxyTo(target string) http.Handler {
+func makeProxy(target string) *httputil.ReverseProxy {
 	u, err := url.Parse(target)
 	if err != nil {
 		log.Fatalf("bad target %s: %v", target, err)
@@ -88,8 +27,22 @@ func proxyTo(target string) http.Handler {
 	return httputil.NewSingleHostReverseProxy(u)
 }
 
-func withCORS(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func main() {
+	authURL := mustEnv("AUTH_URL")
+	catalogURL := mustEnv("CATALOG_URL")
+	orderURL := mustEnv("ORDER_URL")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	authProxy := makeProxy(authURL)
+	catalogProxy := makeProxy(catalogURL)
+	orderProxy := makeProxy(orderURL)
+
+	rl := newRateLimiter(100, time.Minute)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Idempotency-Key")
@@ -97,8 +50,42 @@ func withCORS(h http.Handler) http.Handler {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		h.ServeHTTP(w, r)
+
+		path := r.URL.Path
+
+		switch {
+		case path == "/healthz":
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("ok"))
+
+		case strings.HasPrefix(path, "/auth/"):
+			r.URL.Path = strings.TrimPrefix(path, "/auth")
+			if r.URL.Path == "" {
+				r.URL.Path = "/"
+			}
+			authProxy.ServeHTTP(w, r)
+
+		case strings.HasPrefix(path, "/catalog/"):
+			r.URL.Path = strings.TrimPrefix(path, "/catalog")
+			if r.URL.Path == "" {
+				r.URL.Path = "/"
+			}
+			catalogProxy.ServeHTTP(w, r)
+
+		default:
+			// cart, checkout, orders, admin — all go to order-service unchanged
+			orderProxy.ServeHTTP(w, r)
+		}
 	})
+
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           rl.middleware(handler),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	log.Printf("api-gateway listening on :%s", port)
+	log.Fatal(srv.ListenAndServe())
 }
 
 type rateLimiter struct {
@@ -138,6 +125,8 @@ func (r *rateLimiter) middleware(h http.Handler) http.Handler {
 }
 
 func clientKey(r *http.Request) string {
+	// BUG (intentional): trusts X-Forwarded-For unconditionally, allowing
+	// rate-limit bypass by rotating that header. Caught by test_rate_limit_bypass_via_xff.
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		return xff
 	}
