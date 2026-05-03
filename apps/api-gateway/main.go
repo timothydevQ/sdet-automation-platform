@@ -1,41 +1,45 @@
-package com.sdet.pages;
+package main
 
-import org.openqa.selenium.By;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
-import org.openqa.selenium.support.ui.ExpectedConditions;
-import org.openqa.selenium.support.ui.WebDriverWait;
+import (
+	"log"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"os"
+	"strings"
+	"sync"
+	"time"
+)
 
-import java.time.Duration;
-
-public class LoginPage {
-    private final WebDriver driver;
-    private final WebDriverWait wait;
-
-    public LoginPage(WebDriver d) {
-        this.driver = d;
-        this.wait = new WebDriverWait(d, Duration.ofSeconds(15));
-    }
-
-    public void open(String base) {
-        driver.get(base + "/login");
-        wait.until(ExpectedConditions.presenceOfElementLocated(
-                By.cssSelector("[data-testid='email']")));
-    }
-
-    public void login(String email, String password) {
-        driver.findElement(By.cssSelector("[data-testid='email']")).sendKeys(email);
-        driver.findElement(By.cssSelector("[data-testid='password']")).sendKeys(password);
-        driver.findElement(By.cssSelector("[data-testid='submit']")).click();
-    }
-
-    public boolean hasError() {
-        try {
-            WebElement err = wait.until(ExpectedConditions.visibilityOfElementLocated(
-                    By.cssSelector("[data-testid='error']")));
-            return err.isDisplayed();
-        } catch (Exception e) {
-            return false;
-        }
-    }
+type config struct {
+	Auth    string
+	Catalog string
+	Order   string
 }
+
+func loadConfig() config {
+	return config{
+		Auth:    must("AUTH_URL"),
+		Catalog: must("CATALOG_URL"),
+		Order:   must("ORDER_URL"),
+	}
+}
+
+func must(k string) string {
+	v := os.Getenv(k)
+	if v == "" {
+		log.Fatalf("%s required", k)
+	}
+	return v
+}
+
+func main() {
+	cfg := loadConfig()
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	mux := http.NewServeMux()
+
+	mux.Handle("/auth/", stripAndProxy("/a
