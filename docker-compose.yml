@@ -68,7 +68,7 @@ services:
     build: ./apps/payment-service
     environment:
       PORT: "8083"
-      FAILURE_RATE: "0.05"
+      FAILURE_RATE: "0"
     ports:
       - "8083:8083"
 
