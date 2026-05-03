@@ -42,13 +42,9 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// Auth: strip /auth prefix before forwarding
 	mux.Handle("/auth/", stripAndProxy("/auth", cfg.Auth))
-
-	// Catalog: strip /catalog prefix before forwarding
 	mux.Handle("/catalog/", stripAndProxy("/catalog", cfg.Catalog))
 
-	// Order service: forward full path (order-service owns these prefixes)
 	mux.Handle("/cart", proxyTo(cfg.Order))
 	mux.Handle("/cart/", proxyTo(cfg.Order))
 	mux.Handle("/checkout", proxyTo(cfg.Order))
@@ -69,7 +65,6 @@ func main() {
 	log.Fatal(srv.ListenAndServe())
 }
 
-// stripAndProxy removes the prefix from the path before forwarding.
 func stripAndProxy(prefix, target string) http.Handler {
 	u, err := url.Parse(target)
 	if err != nil {
@@ -85,7 +80,6 @@ func stripAndProxy(prefix, target string) http.Handler {
 	})
 }
 
-// proxyTo forwards the request unchanged.
 func proxyTo(target string) http.Handler {
 	u, err := url.Parse(target)
 	if err != nil {
@@ -144,8 +138,6 @@ func (r *rateLimiter) middleware(h http.Handler) http.Handler {
 }
 
 func clientKey(r *http.Request) string {
-	// BUG (intentional): trusts X-Forwarded-For unconditionally, allowing
-	// rate-limit bypass by rotating that header. Caught by test_rate_limit_bypass_via_xff.
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		return xff
 	}
