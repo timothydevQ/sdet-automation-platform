@@ -1,3 +1,4 @@
+using System;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
@@ -17,13 +18,13 @@ public class AuthClient
 
     public async Task<TokenResponse> RegisterCustomerAsync()
     {
-        var email = $"u{Guid.NewGuid():N}".Substring(0, 11) + "@test.local";
+        var email = "u" + Guid.NewGuid().ToString("N").Substring(0, 10) + "@test.local";
         return await RegisterAsync(email, "Hunter22!");
     }
 
     public async Task<TokenResponse> RegisterAdminAsync()
     {
-        var email = $"a{Guid.NewGuid():N}".Substring(0, 11) + "@admin.local";
+        var email = "a" + Guid.NewGuid().ToString("N").Substring(0, 10) + "@admin.local";
         return await RegisterAsync(email, "Hunter22!");
     }
 

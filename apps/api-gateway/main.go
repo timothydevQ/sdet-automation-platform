@@ -41,13 +41,20 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+
+	// Auth: strip /auth prefix before forwarding
 	mux.Handle("/auth/", stripAndProxy("/auth", cfg.Auth))
+
+	// Catalog: strip /catalog prefix before forwarding
 	mux.Handle("/catalog/", stripAndProxy("/catalog", cfg.Catalog))
-	mux.Handle("/orders/", stripAndProxy("/orders", cfg.Order))
-	mux.Handle("/cart/", stripAndProxy("", cfg.Order))
-	mux.Handle("/checkout", stripAndProxy("", cfg.Order))
-	mux.Handle("/admin/", stripAndProxy("", cfg.Order))
-        mux.Handle("POST /checkout", stripAndProxy("", cfg.Order))
+
+	// Order service: forward full path (order-service owns these prefixes)
+	mux.Handle("/cart", proxyTo(cfg.Order))
+	mux.Handle("/cart/", proxyTo(cfg.Order))
+	mux.Handle("/checkout", proxyTo(cfg.Order))
+	mux.Handle("/orders/", proxyTo(cfg.Order))
+	mux.Handle("/admin/", proxyTo(cfg.Order))
+
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
@@ -62,6 +69,7 @@ func main() {
 	log.Fatal(srv.ListenAndServe())
 }
 
+// stripAndProxy removes the prefix from the path before forwarding.
 func stripAndProxy(prefix, target string) http.Handler {
 	u, err := url.Parse(target)
 	if err != nil {
@@ -69,14 +77,21 @@ func stripAndProxy(prefix, target string) http.Handler {
 	}
 	rp := httputil.NewSingleHostReverseProxy(u)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if prefix != "" {
-			r.URL.Path = strings.TrimPrefix(r.URL.Path, prefix)
-			if r.URL.Path == "" {
-				r.URL.Path = "/"
-			}
+		r.URL.Path = strings.TrimPrefix(r.URL.Path, prefix)
+		if r.URL.Path == "" {
+			r.URL.Path = "/"
 		}
 		rp.ServeHTTP(w, r)
 	})
+}
+
+// proxyTo forwards the request unchanged.
+func proxyTo(target string) http.Handler {
+	u, err := url.Parse(target)
+	if err != nil {
+		log.Fatalf("bad target %s: %v", target, err)
+	}
+	return httputil.NewSingleHostReverseProxy(u)
 }
 
 func withCORS(h http.Handler) http.Handler {
@@ -93,10 +108,10 @@ func withCORS(h http.Handler) http.Handler {
 }
 
 type rateLimiter struct {
-	mu       sync.Mutex
-	max      int
-	window   time.Duration
-	buckets  map[string][]time.Time
+	mu      sync.Mutex
+	max     int
+	window  time.Duration
+	buckets map[string][]time.Time
 }
 
 func newRateLimiter(max int, window time.Duration) *rateLimiter {
@@ -130,7 +145,7 @@ func (r *rateLimiter) middleware(h http.Handler) http.Handler {
 
 func clientKey(r *http.Request) string {
 	// BUG (intentional): trusts X-Forwarded-For unconditionally, allowing
-	// rate-limit bypass by rotating that header. Caught by test_rate_limit_bypass.
+	// rate-limit bypass by rotating that header. Caught by test_rate_limit_bypass_via_xff.
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		return xff
 	}

@@ -5,6 +5,8 @@ export class CartPage {
 
   async goto() {
     await this.page.goto("/cart");
+    // Wait for cart to finish loading
+    await this.page.waitForLoadState("networkidle");
   }
 
   async checkout() {
@@ -12,7 +14,11 @@ export class CartPage {
   }
 
   async expectItemCount(n: number) {
-    const items = this.page.getByTestId(/^cart-item-/);
-    await expect(items).toHaveCount(n);
+    if (n === 0) {
+      await expect(this.page.getByTestId(/^cart-item-/)).toHaveCount(0, { timeout: 10000 });
+    } else {
+      await expect(this.page.getByTestId(/^cart-item-/).first()).toBeVisible({ timeout: 10000 });
+      await expect(this.page.getByTestId(/^cart-item-/)).toHaveCount(n, { timeout: 10000 });
+    }
   }
 }
