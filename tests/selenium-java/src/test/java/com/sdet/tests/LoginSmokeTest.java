@@ -39,7 +39,7 @@ public class LoginSmokeTest {
     void invalidCredentialsShowError() {
         LoginPage login = new LoginPage(driver);
         login.open(Driver.baseUrl());
-        login.login("nobody@test.local", "bad");
+        login.login("nobody@test.local", "badpass123");
         assertTrue(login.hasError());
     }
 
